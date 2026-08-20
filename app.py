@@ -636,13 +636,9 @@ elif menu == "Caderno e Tópicos":
             st.info("Nenhuma documentação encontrada.")
         else:
             for nota in anotacoes:
-                with st.container():
-                    st.markdown(f"""
-                    <div style="background-color: rgba(17, 19, 24, 0.4); padding: 18px; border-radius: 12px; border-left: 4px solid rgba(255,255,255,0.2); border: 1px solid rgba(255, 255, 255, 0.05); margin-bottom: 15px; backdrop-filter: blur(10px);">
-                        <h3 style="margin-top:0; margin-bottom: 4px; color: rgba(255,255,255,0.9); font-weight: 600;">{nota.titulo}</h3>
-                        <p style="color: rgba(255,255,255,0.4); font-size: 0.85em; margin-bottom: 8px;">Criado em: {nota.data_criacao.strftime('%d/%m/%Y %H:%M')}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Expander com o título: recolhido por padrão
+                with st.expander(f"📄 {nota.titulo}", expanded=False):
+                    st.caption(f"Criado em: {nota.data_criacao.strftime('%d/%m/%Y %H:%M')}")
                     
                     if nota.tags:
                         badges = "".join([f"<span style='background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); padding: 4px 10px; border-radius: 12px; font-size: 0.7em; margin-right: 6px; border: 1px solid rgba(255,255,255,0.05);'>{t}</span>" for t in nota.tags.split(",")])
@@ -658,6 +654,7 @@ elif menu == "Caderno e Tópicos":
                         except Exception:
                             pass
 
+                    st.markdown("---")
                     confirm_k_nota = f"del_nota_{nota.id}"
                     if not st.session_state.get(confirm_k_nota, False):
                         if st.button("Excluir Documento", key=f"btn_nota_{nota.id}"):
@@ -669,14 +666,11 @@ elif menu == "Caderno e Tópicos":
                         if c_y.button("Sim", key=f"y_nota_{nota.id}"):
                             n_del = db.query(Anotacao).filter_by(id=nota.id).first()
                             db.delete(n_del)
-                            db.commit()
                             st.session_state[confirm_k_nota] = False
                             st.rerun()
                         if c_n.button("Não", key=f"n_nota_{nota.id}"):
                             st.session_state[confirm_k_nota] = False
                             st.rerun()
-                    st.markdown("<br>", unsafe_allow_html=True)
-
 elif menu == "Estatísticas":
     st.title("Métricas de Desempenho")
     st.markdown("Análise quantitativa de volume e distribuição de prioridades.")
