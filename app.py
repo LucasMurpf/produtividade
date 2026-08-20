@@ -98,6 +98,7 @@ class Usuario(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     senha_hash = Column(String, nullable=False)
     reset_token = Column(String, nullable=True)
+    session_token = Column(String, nullable=True)
     
     tarefas_criadas = relationship("Tarefa", foreign_keys="Tarefa.criador_id", backref="criador", cascade="all, delete-orphan")
     tarefas_atribuidas = relationship("Tarefa", foreign_keys="Tarefa.responsavel_id", backref="responsavel_user", cascade="all, delete-orphan")
@@ -153,7 +154,7 @@ class Anotacao(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# Migração segura de coluna
+# Migração segura de colunas
 try:
     inspector = inspect(engine)
     if 'usuarios' in inspector.get_table_names():
@@ -161,6 +162,10 @@ try:
         if 'reset_token' not in colunas:
             with engine.connect() as conexao:
                 conexao.execute(text("ALTER TABLE usuarios ADD COLUMN reset_token VARCHAR"))
+                conexao.commit()
+        if 'session_token' not in colunas:
+            with engine.connect() as conexao:
+                conexao.execute(text("ALTER TABLE usuarios ADD COLUMN session_token VARCHAR"))
                 conexao.commit()
 except Exception as e:
     logger.warning(f"Aviso na verificacao de colunas: {e}")
@@ -189,13 +194,23 @@ def show_toast(mensagem: str, tipo: str = "info"):
     """, unsafe_allow_html=True)
 
 
-# --- CONTROLE DE SESSÃO ---
+# --- CONTROLE DE SESSÃO COM AUTO-LOGIN (PERSISTE NO F5) ---
 if "user_id" not in st.session_state: 
     st.session_state.user_id = None
 if "username" not in st.session_state: 
     st.session_state.username = None
 if "menu_ativo" not in st.session_state: 
     st.session_state.menu_ativo = "Visão Geral"
+
+# Se o usuário não estiver na memória, busca o token persistido na URL
+if st.session_state.user_id is None:
+    token_url = st.query_params.get("session", None)
+    if token_url:
+        with get_db() as db:
+            user_encontrado = db.query(Usuario).filter(Usuario.session_token == token_url).first()
+            if user_encontrado:
+                st.session_state.user_id = user_encontrado.id
+                st.session_state.username = user_encontrado.username
 
 
 # --- TELA DE AUTENTICAÇÃO ---
@@ -241,8 +256,13 @@ if st.session_state.user_id is None:
                     with get_db() as db:
                         user_db = db.query(Usuario).filter(Usuario.username == user_input).first()
                         if user_db and verificar_senha(senha_input, user_db.senha_hash):
+                            novo_token_sessao = str(uuid.uuid4())
+                            user_db.session_token = novo_token_sessao
+                            db.commit()
+                            
                             st.session_state.user_id = user_db.id
                             st.session_state.username = user_db.username
+                            st.query_params["session"] = novo_token_sessao
                             st.rerun()
                         else:
                             st.error("Usuário ou senha incorretos.")
@@ -290,7 +310,7 @@ if st.session_state.user_id is None:
 
 user_id = st.session_state.user_id
 
-# --- SIDEBAR (NAVEGAÇÃO COM SINCRONIZAÇÃO NATIVA) ---
+# --- SIDEBAR ---
 st.sidebar.markdown(f"### Lucid Productive")
 st.sidebar.caption(f"Workspace: **{st.session_state.username}**")
 
@@ -324,9 +344,17 @@ menu = st.sidebar.radio(
 )
 
 if st.sidebar.button("Encerrar Sessão"):
+    with get_db() as db:
+        if st.session_state.user_id:
+            u_sair = db.query(Usuario).filter(Usuario.id == st.session_state.user_id).first()
+            if u_sair:
+                u_sair.session_token = None
+                db.commit()
+                
     st.session_state.user_id = None
     st.session_state.username = None
     st.session_state.menu_ativo = "Visão Geral"
+    st.query_params.clear()
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -525,7 +553,6 @@ elif menu == "Gerenciador de Tarefas":
                                     
                                     if c_s3.button("X", key=f"del_sub_{sub.id}"):
                                         db.delete(sub)
-                                        db.commit()
                                         st.rerun()
 
                                     if sub.imagem_base64:
@@ -574,7 +601,6 @@ elif menu == "Gerenciador de Tarefas":
                                 col_y, col_n = st.columns(2)
                                 if col_y.button("Sim, remover", key=f"yes_rem_{t.id}"):
                                     db.delete(t)
-                                    db.commit()
                                     st.session_state[confirm_key] = False
                                     st.rerun()
                                 if col_n.button("Cancelar", key=f"no_rem_{t.id}"):
@@ -636,7 +662,6 @@ elif menu == "Caderno e Tópicos":
             st.info("Nenhuma documentação encontrada.")
         else:
             for nota in anotacoes:
-                # Expander com o título: recolhido por padrão
                 with st.expander(f"📄 {nota.titulo}", expanded=False):
                     st.caption(f"Criado em: {nota.data_criacao.strftime('%d/%m/%Y %H:%M')}")
                     
@@ -671,6 +696,7 @@ elif menu == "Caderno e Tópicos":
                         if c_n.button("Não", key=f"n_nota_{nota.id}"):
                             st.session_state[confirm_k_nota] = False
                             st.rerun()
+
 elif menu == "Estatísticas":
     st.title("Métricas de Desempenho")
     st.markdown("Análise quantitativa de volume e distribuição de prioridades.")
