@@ -82,7 +82,6 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-        db.commit()
     except Exception as e:
         db.rollback()
         logger.error(f"Erro na transacao do banco: {e}")
@@ -202,7 +201,6 @@ if "username" not in st.session_state:
 if "menu_ativo" not in st.session_state: 
     st.session_state.menu_ativo = "Visão Geral"
 
-# Se o usuário não estiver na memória, busca o token persistido na URL
 if st.session_state.user_id is None:
     token_url = st.query_params.get("session", None)
     if token_url:
@@ -280,6 +278,7 @@ if st.session_state.user_id is None:
                                 st.error("Usuário já existe.")
                             else:
                                 db.add(Usuario(username=novo_user, senha_hash=hash_senha(nova_senha)))
+                                db.commit()
                                 st.success("Conta criada! Vá para a aba Entrar.")
 
         with aba_reset:
@@ -291,6 +290,7 @@ if st.session_state.user_id is None:
                         if u_db:
                             token = str(uuid.uuid4())[:8].upper()
                             u_db.reset_token = token
+                            db.commit()
                             st.info(f"Token gerado para {u_reset}. Verifique o painel Admin.")
                         else:
                             st.error("Usuário não encontrado.")
@@ -303,6 +303,7 @@ if st.session_state.user_id is None:
                         if u_db and u_db.reset_token and u_db.reset_token == t_input.strip():
                             u_db.senha_hash = hash_senha(new_s)
                             u_db.reset_token = None
+                            db.commit()
                             st.success("Senha alterada com sucesso!")
                         else:
                             st.error("Token ou usuário inválidos.")
@@ -328,6 +329,7 @@ with get_db() as db:
             if st.button("Marcar todas como lidas"):
                 for notif in notificacoes_usuario:
                     notif.lida = True
+                db.commit()
                 st.rerun()
 
 menu_opcoes = ["Visão Geral", "Gerenciador de Tarefas", "Caderno e Tópicos", "Estatísticas"]
@@ -469,7 +471,7 @@ elif menu == "Gerenciador de Tarefas":
             
             submitted = st.form_submit_button("Cadastrar")
             if submitted and novo_titulo:
-                with get_db() as db:
+                with get_db() as db_create:
                     id_resp = dict_usuarios[resp_escolhido]
                     nova = Tarefa(
                         titulo=novo_titulo, 
@@ -479,12 +481,12 @@ elif menu == "Gerenciador de Tarefas":
                         criador_id=user_id,
                         responsavel_id=id_resp
                     )
-                    db.add(nova)
-                    db.flush()
+                    db_create.add(nova)
                     
                     if id_resp != user_id:
                         notif = Notificacao(mensagem=f"Nova demanda atribuída por {st.session_state.username}: '{novo_titulo}'", usuario_id=id_resp)
-                        db.add(notif)
+                        db_create.add(notif)
+                    db_create.commit()
                 
                 show_toast(f"Demanda '{novo_titulo}' criada com sucesso.", "success")
                 st.rerun()
@@ -533,6 +535,7 @@ elif menu == "Gerenciador de Tarefas":
                             if novo_status != t.status_kanban:
                                 t.status_kanban = novo_status
                                 t.concluida = True if novo_status == "Concluído" else False
+                                db.commit()
                                 st.rerun()
 
                             st.markdown("---")
@@ -553,6 +556,7 @@ elif menu == "Gerenciador de Tarefas":
                                     
                                     if c_s3.button("X", key=f"del_sub_{sub.id}"):
                                         db.delete(sub)
+                                        db.commit()
                                         st.rerun()
 
                                     if sub.imagem_base64:
@@ -576,18 +580,21 @@ elif menu == "Gerenciador de Tarefas":
                                             img_sub_b64 = base64.b64encode(st_img.read()).decode("utf-8")
 
                                         id_resp_sub = dict_usuarios[st_resp]
-                                        nova_sub = SubTarefa(
-                                            titulo=st_tit, 
-                                            prazo=st_pz, 
-                                            responsavel_id=id_resp_sub,
-                                            imagem_base64=img_sub_b64,
-                                            tarefa_id=t.id
-                                        )
-                                        db.add(nova_sub)
                                         
-                                        if id_resp_sub != user_id:
-                                            notif_sub = Notificacao(mensagem=f"Subtarefa atribuída por {st.session_state.username}: '{st_tit}'", usuario_id=id_resp_sub)
-                                            db.add(notif_sub)
+                                        with get_db() as db_sub:
+                                            nova_sub = SubTarefa(
+                                                titulo=st_tit, 
+                                                prazo=st_pz, 
+                                                responsavel_id=id_resp_sub,
+                                                imagem_base64=img_sub_b64,
+                                                tarefa_id=t.id
+                                            )
+                                            db_sub.add(nova_sub)
+                                            
+                                            if id_resp_sub != user_id:
+                                                notif_sub = Notificacao(mensagem=f"Subtarefa atribuída por {st.session_state.username}: '{st_tit}'", usuario_id=id_resp_sub)
+                                                db_sub.add(notif_sub)
+                                            db_sub.commit()
                                         st.rerun()
 
                             st.markdown("---")
@@ -601,6 +608,7 @@ elif menu == "Gerenciador de Tarefas":
                                 col_y, col_n = st.columns(2)
                                 if col_y.button("Sim, remover", key=f"yes_rem_{t.id}"):
                                     db.delete(t)
+                                    db.commit()
                                     st.session_state[confirm_key] = False
                                     st.rerun()
                                 if col_n.button("Cancelar", key=f"no_rem_{t.id}"):
@@ -642,6 +650,7 @@ elif menu == "Caderno e Tópicos":
                             usuario_id=user_id
                         )
                         db.add(nova_nota)
+                        db.commit()
                     show_toast("Documentação salva com sucesso.", "success")
                     st.rerun()
                 else:
@@ -691,6 +700,7 @@ elif menu == "Caderno e Tópicos":
                         if c_y.button("Sim", key=f"y_nota_{nota.id}"):
                             n_del = db.query(Anotacao).filter_by(id=nota.id).first()
                             db.delete(n_del)
+                            db.commit()
                             st.session_state[confirm_k_nota] = False
                             st.rerun()
                         if c_n.button("Não", key=f"n_nota_{nota.id}"):
