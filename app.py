@@ -371,7 +371,7 @@ if "pomodoro_fim" not in st.session_state:
 if "pomodoro_total" not in st.session_state:
     st.session_state.pomodoro_total = tempo_foco * 60
 if "arvore_status" not in st.session_state:
-    st.session_state.arvore_status = "neutra"  # "neutra", "crescendo", "viva", "morta"
+    st.session_state.arvore_status = "neutra"
 
 col_p1, col_p2 = st.sidebar.columns(2)
 if col_p1.button("Iniciar"):
@@ -399,41 +399,28 @@ def render_pomodoro_e_arvore():
             progresso = 1.0 - (restante / total)
             m, sec = divmod(restante, 60)
             
-            # Cálculo de estágios da árvore (0.0 até 1.0)
-            altura_tronco = 10 + (progresso * 35) # de 10 a 45px
-            raio_folha_base = max(0, (progresso - 0.25) / 0.75) * 26 # nasce após 25%
-            raio_folha_topo = max(0, (progresso - 0.50) / 0.50) * 18 # nasce após 50%
+            altura_tronco = 10 + (progresso * 35)
+            raio_folha_base = max(0, (progresso - 0.25) / 0.75) * 26
+            raio_folha_topo = max(0, (progresso - 0.50) / 0.50) * 18
             
-            svg_arvore = f"""
-            <svg width="100%" height="110" viewBox="0 0 140 110" style="display: block; margin: auto;">
-                <!-- Linha de solo -->
-                <line x1="20" y1="95" x2="120" y2="95" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-linecap="round" />
-                
-                <!-- Broto / Tronco -->
-                <line x1="70" y1="95" x2="70" y2="{95 - altura_tronco}" stroke="#854d0e" stroke-width="{3 + progresso * 3}" stroke-linecap="round" />
-                
-                <!-- Ramos intermediários -->
-                {f'<line x1="70" y1="75" x2="58" y2="65" stroke="#854d0e" stroke-width="3" stroke-linecap="round" />' if progresso > 0.4 else ''}
-                {f'<line x1="70" y1="70" x2="82" y2="60" stroke="#854d0e" stroke-width="3" stroke-linecap="round" />' if progresso > 0.4 else ''}
-                
-                <!-- Copa das folhas -->
-                {f'<circle cx="70" cy="55" r="{raio_folha_base}" fill="#16a34a" fill-opacity="0.85" />' if raio_folha_base > 0 else ''}
-                {f'<circle cx="56" cy="58" r="{raio_folha_base * 0.75}" fill="#15803d" fill-opacity="0.9" />' if raio_folha_base > 0 else ''}
-                {f'<circle cx="84" cy="58" r="{raio_folha_base * 0.75}" fill="#15803d" fill-opacity="0.9" />' if raio_folha_base > 0 else ''}
-                {f'<circle cx="70" cy="40" r="{raio_folha_topo}" fill="#22c55e" fill-opacity="0.95" />' if raio_folha_topo > 0 else ''}
-                
-                <!-- Semente inicial -->
-                {f'<ellipse cx="70" cy="94" rx="4" ry="2.5" fill="#a16207" />' if progresso <= 0.25 else ''}
-            </svg>
-            """
-            
-            st.markdown(f"""
-            <div style='background: rgba(17, 24, 39, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; margin-top: 10px;'>
-                {svg_arvore}
-                <div style='text-align: center; font-size: 1.4rem; font-weight: 700; color: #ffffff; letter-spacing: 0.05em; margin-top: 4px;'>{m:02d}:{sec:02d}</div>
-                <div style='text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 2px;'>Mantenha o foco para a árvore crescer ({int(progresso * 100)}%)</div>
-            </div>
-            """, unsafe_allow_html=True)
+            galho_esq = f'<line x1="70" y1="75" x2="58" y2="65" stroke="#854d0e" stroke-width="3" stroke-linecap="round" />' if progresso > 0.4 else ''
+            galho_dir = f'<line x1="70" y1="70" x2="82" y2="60" stroke="#854d0e" stroke-width="3" stroke-linecap="round" />' if progresso > 0.4 else ''
+            folhas_base = f'<circle cx="70" cy="55" r="{raio_folha_base}" fill="#16a34a" fill-opacity="0.85" /><circle cx="56" cy="58" r="{raio_folha_base * 0.75}" fill="#15803d" fill-opacity="0.9" /><circle cx="84" cy="58" r="{raio_folha_base * 0.75}" fill="#15803d" fill-opacity="0.9" />' if raio_folha_base > 0 else ''
+            folhas_topo = f'<circle cx="70" cy="40" r="{raio_folha_topo}" fill="#22c55e" fill-opacity="0.95" />' if raio_folha_topo > 0 else ''
+            semente = '<ellipse cx="70" cy="94" rx="4" ry="2.5" fill="#a16207" />' if progresso <= 0.25 else ''
+
+            html_card = (
+                f"<div style='background: rgba(17, 24, 39, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px; margin-top: 10px;'>"
+                f"<svg width='100%' height='110' viewBox='0 0 140 110' style='display: block; margin: auto;'>"
+                f"<line x1='20' y1='95' x2='120' y2='95' stroke='rgba(255,255,255,0.15)' stroke-width='2' stroke-linecap='round' />"
+                f"<line x1='70' y1='95' x2='70' y2='{95 - altura_tronco}' stroke='#854d0e' stroke-width='{3 + progresso * 3}' stroke-linecap='round' />"
+                f"{galho_esq}{galho_dir}{folhas_base}{folhas_topo}{semente}"
+                f"</svg>"
+                f"<div style='text-align: center; font-size: 1.4rem; font-weight: 700; color: #ffffff; letter-spacing: 0.05em; margin-top: 4px;'>{m:02d}:{sec:02d}</div>"
+                f"<div style='text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.4); margin-top: 2px;'>Mantenha o foco para a árvore crescer ({int(progresso * 100)}%)</div>"
+                f"</div>"
+            )
+            st.markdown(html_card, unsafe_allow_html=True)
             
         else:
             st.session_state.pomodoro_fim = None
@@ -441,63 +428,51 @@ def render_pomodoro_e_arvore():
             st.rerun()
 
     elif status == "viva":
-        # Árvore adulta e florida após cumprir o tempo
-        svg_arvore_viva = """
-        <svg width="100%" height="110" viewBox="0 0 140 110" style="display: block; margin: auto;">
-            <line x1="20" y1="95" x2="120" y2="95" stroke="#16a34a" stroke-width="2" stroke-linecap="round" />
-            <line x1="70" y1="95" x2="70" y2="50" stroke="#854d0e" stroke-width="6" stroke-linecap="round" />
-            <circle cx="70" cy="50" r="28" fill="#16a34a" fill-opacity="0.9" />
-            <circle cx="52" cy="55" r="22" fill="#15803d" fill-opacity="0.9" />
-            <circle cx="88" cy="55" r="22" fill="#15803d" fill-opacity="0.9" />
-            <circle cx="70" cy="35" r="20" fill="#22c55e" fill-opacity="0.95" />
-            <!-- Flores -->
-            <circle cx="58" cy="45" r="3" fill="#f43f5e" />
-            <circle cx="82" cy="48" r="3" fill="#f43f5e" />
-            <circle cx="70" cy="28" r="3.5" fill="#facc15" />
-        </svg>
-        """
-        st.markdown(f"""
-        <div style='background: rgba(22, 163, 74, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 12px; margin-top: 10px;'>
-            {svg_arvore_viva}
-            <div style='text-align: center; font-size: 0.9rem; font-weight: 600; color: #4ade80; margin-top: 4px;'>Ciclo completo! Árvore salva.</div>
-        </div>
-        """, unsafe_allow_html=True)
+        html_viva = (
+            "<div style='background: rgba(22, 163, 74, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 12px; padding: 12px; margin-top: 10px;'>"
+            "<svg width='100%' height='110' viewBox='0 0 140 110' style='display: block; margin: auto;'>"
+            "<line x1='20' y1='95' x2='120' y2='95' stroke='#16a34a' stroke-width='2' stroke-linecap='round' />"
+            "<line x1='70' y1='95' x2='70' y2='50' stroke='#854d0e' stroke-width='6' stroke-linecap='round' />"
+            "<circle cx='70' cy='50' r='28' fill='#16a34a' fill-opacity='0.9' />"
+            "<circle cx='52' cy='55' r='22' fill='#15803d' fill-opacity='0.9' />"
+            "<circle cx='88' cy='55' r='22' fill='#15803d' fill-opacity='0.9' />"
+            "<circle cx='70' cy='35' r='20' fill='#22c55e' fill-opacity='0.95' />"
+            "<circle cx='58' cy='45' r='3' fill='#f43f5e' />"
+            "<circle cx='82' cy='48' r='3' fill='#f43f5e' />"
+            "<circle cx='70' cy='28' r='3.5' fill='#facc15' />"
+            "</svg>"
+            "<div style='text-align: center; font-size: 0.9rem; font-weight: 600; color: #4ade80; margin-top: 4px;'>Ciclo completo! Árvore salva.</div>"
+            "</div>"
+        )
+        st.markdown(html_viva, unsafe_allow_html=True)
 
     elif status == "morta":
-        # Árvore seca / morta caso tenha cancelado
-        svg_arvore_morta = """
-        <svg width="100%" height="110" viewBox="0 0 140 110" style="display: block; margin: auto;">
-            <line x1="20" y1="95" x2="120" y2="95" stroke="#ef4444" stroke-width="2" stroke-linecap="round" />
-            <!-- Tronco e galhos secos -->
-            <line x1="70" y1="95" x2="70" y2="55" stroke="#52525b" stroke-width="4" stroke-linecap="round" />
-            <line x1="70" y1="75" x2="52" y2="60" stroke="#52525b" stroke-width="2.5" stroke-linecap="round" />
-            <line x1="70" y1="68" x2="88" y2="58" stroke="#52525b" stroke-width="2.5" stroke-linecap="round" />
-            <line x1="52" y1="60" x2="44" y2="68" stroke="#52525b" stroke-width="1.5" stroke-linecap="round" />
-            <line x1="88" y1="58" x2="96" y2="65" stroke="#52525b" stroke-width="1.5" stroke-linecap="round" />
-            <!-- Folha caída -->
-            <ellipse cx="80" cy="93" rx="4" ry="2" fill="#71717a" />
-        </svg>
-        """
-        st.markdown(f"""
-        <div style='background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 12px; margin-top: 10px;'>
-            {svg_arvore_morta}
-            <div style='text-align: center; font-size: 0.85rem; font-weight: 600; color: #f87171; margin-top: 4px;'>Você desistiu. A árvore secou.</div>
-        </div>
-        """, unsafe_allow_html=True)
+        html_morta = (
+            "<div style='background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 12px; margin-top: 10px;'>"
+            "<svg width='100%' height='110' viewBox='0 0 140 110' style='display: block; margin: auto;'>"
+            "<line x1='20' y1='95' x2='120' y2='95' stroke='#ef4444' stroke-width='2' stroke-linecap='round' />"
+            "<line x1='70' y1='95' x2='70' y2='55' stroke='#52525b' stroke-width='4' stroke-linecap='round' />"
+            "<line x1='70' y1='75' x2='52' y2='60' stroke='#52525b' stroke-width='2.5' stroke-linecap='round' />"
+            "<line x1='70' y1='68' x2='88' y2='58' stroke='#52525b' stroke-width='2.5' stroke-linecap='round' />"
+            "<line x1='52' y1='60' x2='44' y2='68' stroke='#52525b' stroke-width='1.5' stroke-linecap='round' />"
+            "<line x1='88' y1='58' x2='96' y2='65' stroke='#52525b' stroke-width='1.5' stroke-linecap='round' />"
+            "<ellipse cx='80' cy='93' rx='4' ry='2' fill='#71717a' />"
+            "</svg>"
+            "<div style='text-align: center; font-size: 0.85rem; font-weight: 600; color: #f87171; margin-top: 4px;'>Você desistiu. A árvore secou.</div>"
+            "</div>"
+        )
+        st.markdown(html_morta, unsafe_allow_html=True)
     else:
-        # Estado inicial / neutro
-        svg_arvore_neutra = """
-        <svg width="100%" height="80" viewBox="0 0 140 80" style="display: block; margin: auto; opacity: 0.3;">
-            <line x1="30" y1="65" x2="110" y2="65" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
-            <circle cx="70" cy="64" r="3" fill="#ffffff" />
-        </svg>
-        """
-        st.markdown(f"""
-        <div style='background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; margin-top: 10px;'>
-            {svg_arvore_neutra}
-            <div style='text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.3);'>Inicie o ciclo para plantar sua árvore</div>
-        </div>
-        """, unsafe_allow_html=True)
+        html_neutro = (
+            "<div style='background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; margin-top: 10px;'>"
+            "<svg width='100%' height='80' viewBox='0 0 140 80' style='display: block; margin: auto; opacity: 0.3;'>"
+            "<line x1='30' y1='65' x2='110' y2='65' stroke='#ffffff' stroke-width='2' stroke-linecap='round' />"
+            "<circle cx='70' cy='64' r='3' fill='#ffffff' />"
+            "</svg>"
+            "<div style='text-align: center; font-size: 0.75rem; color: rgba(255,255,255,0.3);'>Inicie o ciclo para plantar sua árvore</div>"
+            "</div>"
+        )
+        st.markdown(html_neutro, unsafe_allow_html=True)
 
 with st.sidebar:
     render_pomodoro_e_arvore()
