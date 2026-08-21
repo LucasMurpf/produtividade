@@ -311,7 +311,7 @@ if st.session_state.user_id is None:
 user_id = st.session_state.user_id
 
 # --- SIDEBAR ---
-st.sidebar.markdown(f"### Lucid Productive")
+st.sidebar.markdown("### Lucid Productive")
 st.sidebar.caption(f"Workspace: **{st.session_state.username}**")
 
 with get_db() as db:
@@ -540,7 +540,7 @@ elif menu == "Gerenciador de Tarefas":
                                 st.rerun()
 
                             # --- EDIÇÃO DA TAREFA ---
-                            with st.expander("✏️ Editar Detalhes da Demanda", expanded=False):
+                            with st.expander("Editar Detalhes da Demanda", expanded=False):
                                 with st.form(key=f"edit_task_form_{t.id}"):
                                     edit_tit = st.text_input("Título", value=t.titulo, key=f"et_tit_{t.id}")
                                     c_et1, c_et2, c_et3 = st.columns(3)
@@ -581,12 +581,12 @@ elif menu == "Gerenciador de Tarefas":
                                     c_s2.markdown(f"<span style='font-size: 0.8em; color: rgba(255,255,255,0.5);'>Resp: {resp_sub_nome} <br>Prazo: {sub_p}</span>", unsafe_allow_html=True)
                                     
                                     # Botão para expandir edição da subtarefa
-                                    edit_sub_toggle = c_s3.button("✏️", key=f"btn_toggle_edit_sub_{sub.id}")
+                                    edit_sub_toggle = c_s3.button("Editar", key=f"btn_toggle_edit_sub_{sub.id}")
                                     if edit_sub_toggle:
                                         st.session_state[f"editing_sub_{sub.id}"] = not st.session_state.get(f"editing_sub_{sub.id}", False)
                                         st.rerun()
 
-                                    if c_s4.button("X", key=f"del_sub_{sub.id}"):
+                                    if c_s4.button("Excluir", key=f"del_sub_{sub.id}"):
                                         db.delete(sub)
                                         db.commit()
                                         st.rerun()
@@ -611,7 +611,7 @@ elif menu == "Gerenciador de Tarefas":
                                     if sub.imagem_base64:
                                         try:
                                             img_bytes = base64.b64decode(sub.imagem_base64)
-                                            st.image(img_bytes, caption=f"Anexo", use_column_width=True)
+                                            st.image(img_bytes, caption="Anexo", use_column_width=True)
                                         except Exception:
                                             pass
 
@@ -720,7 +720,7 @@ elif menu == "Caderno e Tópicos":
             st.info("Nenhuma documentação encontrada.")
         else:
             for nota in anotacoes:
-                with st.expander(f"📄 {nota.titulo}", expanded=False):
+                with st.expander(nota.titulo, expanded=False):
                     st.caption(f"Criado em: {nota.data_criacao.strftime('%d/%m/%Y %H:%M')}")
                     
                     if nota.tags:
@@ -740,7 +740,7 @@ elif menu == "Caderno e Tópicos":
                     st.markdown("---")
                     
                     # --- EDIÇÃO DE DOCUMENTOS ---
-                    with st.expander("✏️ Editar Documentação", expanded=False):
+                    with st.expander("Editar Documentação", expanded=False):
                         with st.form(key=f"form_edit_note_{nota.id}"):
                             edit_not_tit = st.text_input("Título", value=nota.titulo, key=f"en_tit_{nota.id}")
                             edit_not_tags = st.text_input("Tags", value=nota.tags, key=f"en_tags_{nota.id}")
