@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- DESIGN SYSTEM & TOKENS DE ESTILO (LAYOUT DUPLA COLUNA) ---
+# --- DESIGN SYSTEM & TOKENS DE ESTILO ---
 GLOBAL_CSS = """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -37,7 +37,6 @@ GLOBAL_CSS = """
         background-image: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.04) 0%, transparent 40%);
     }
     
-    /* Card de Autenticação Estilo Glassmorphism */
     [data-testid="stForm"] {
         background-color: rgba(17, 24, 39, 0.5) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -193,7 +192,7 @@ def show_toast(mensagem: str, tipo: str = "info"):
     """, unsafe_allow_html=True)
 
 
-# --- CONTROLE DE SESSÃO COM AUTO-LOGIN (PERSISTE NO F5) ---
+# --- CONTROLE DE SESSÃO COM AUTO-LOGIN ---
 if "user_id" not in st.session_state: 
     st.session_state.user_id = None
 if "username" not in st.session_state: 
@@ -339,11 +338,13 @@ if st.session_state.username == "lucasmurpf":
 if st.session_state.menu_ativo not in menu_opcoes:
     st.session_state.menu_ativo = "Visão Geral"
 
-menu = st.sidebar.radio(
+menu_selecionado = st.sidebar.radio(
     "Navegação:", 
     menu_opcoes, 
-    key="menu_ativo"
+    index=menu_opcoes.index(st.session_state.menu_ativo)
 )
+st.session_state.menu_ativo = menu_selecionado
+menu = menu_selecionado
 
 if st.sidebar.button("Encerrar Sessão"):
     with get_db() as db:
@@ -396,6 +397,10 @@ with st.sidebar:
 # --- CONTEÚDO PRINCIPAL ---
 with get_db() as db:
     sub_ids_usuario = [s.tarefa_id for s in db.query(SubTarefa).filter(SubTarefa.responsavel_id == user_id).all()]
+    usuarios_cadastrados = db.query(Usuario).all()
+    dict_usuarios = {u.username: u.id for u in usuarios_cadastrados}
+    lista_usernames = list(dict_usuarios.keys())
+    idx_usuario_logado = lista_usernames.index(st.session_state.username) if st.session_state.username in lista_usernames else 0
 
 if menu == "Painel Admin":
     st.title("Painel Administrativo")
@@ -457,16 +462,12 @@ elif menu == "Visão Geral":
 elif menu == "Gerenciador de Tarefas":
     st.title("Quadro Kanban")
 
-    with get_db() as db:
-        usuarios_cadastrados = db.query(Usuario).all()
-        dict_usuarios = {u.username: u.id for u in usuarios_cadastrados}
-
     with st.expander("Criar Nova Demanda", expanded=False):
         with st.form("form_tarefa", clear_on_submit=True):
             col_f1, col_f2, col_f3, col_f4 = st.columns([0.35, 0.25, 0.2, 0.2])
             novo_titulo = col_f1.text_input("Título da Demanda")
-            resp_escolhido = col_f2.selectbox("Responsável", list(dict_usuarios.keys()), index=list(dict_usuarios.keys()).index(st.session_state.username) if st.session_state.username in dict_usuarios else 0)
-            prioridade = col_f3.selectbox("Prioridade", ["Baixa", "Média", "Alta", "Urgente"])
+            resp_escolhido = col_f2.selectbox("Responsável", lista_usernames, index=idx_usuario_logado)
+            prioridade = col_f3.selectbox("Prioridade", ["Baixa", "Média", "Alta", "Urgente"], index=1)
             prazo = col_f4.date_input("Prazo Limite", value=date.today())
             
             submitted = st.form_submit_button("Cadastrar")
@@ -527,7 +528,7 @@ elif menu == "Gerenciador de Tarefas":
                             st.caption(f"Vencimento: {prazo_str} | Prioridade: {t.prioridade}")
                             
                             novo_status = st.selectbox(
-                                "Status:", 
+                                "Mover Status:", 
                                 ["A Fazer", "Em Andamento", "Concluído"], 
                                 index=["A Fazer", "Em Andamento", "Concluído"].index(t.status_kanban),
                                 key=f"status_{t.id}"
@@ -538,12 +539,37 @@ elif menu == "Gerenciador de Tarefas":
                                 db.commit()
                                 st.rerun()
 
+                            # --- EDIÇÃO DA TAREFA ---
+                            with st.expander("✏️ Editar Detalhes da Demanda", expanded=False):
+                                with st.form(key=f"edit_task_form_{t.id}"):
+                                    edit_tit = st.text_input("Título", value=t.titulo, key=f"et_tit_{t.id}")
+                                    c_et1, c_et2, c_et3 = st.columns(3)
+                                    
+                                    resp_idx = lista_usernames.index(resp_nome) if resp_nome in lista_usernames else idx_usuario_logado
+                                    edit_resp = c_et1.selectbox("Responsável", lista_usernames, index=resp_idx, key=f"et_resp_{t.id}")
+                                    
+                                    prios = ["Baixa", "Média", "Alta", "Urgente"]
+                                    prio_idx = prios.index(t.prioridade) if t.prioridade in prios else 1
+                                    edit_prio = c_et2.selectbox("Prioridade", prios, index=prio_idx, key=f"et_prio_{t.id}")
+                                    
+                                    edit_pz = c_et3.date_input("Prazo", value=t.prazo if t.prazo else date.today(), key=f"et_pz_{t.id}")
+
+                                    if st.form_submit_button("Salvar Alterações da Demanda"):
+                                        t.titulo = edit_tit
+                                        t.responsavel_id = dict_usuarios[edit_resp]
+                                        t.prioridade = edit_prio
+                                        t.prazo = edit_pz
+                                        db.commit()
+                                        show_toast("Demanda atualizada com sucesso.", "success")
+                                        st.rerun()
+
                             st.markdown("---")
                             
+                            # --- SUBTAREFAS ---
                             if t.subtarefas:
                                 st.markdown("**Subtarefas:**")
                                 for sub in t.subtarefas:
-                                    c_s1, c_s2, c_s3 = st.columns([0.5, 0.35, 0.15])
+                                    c_s1, c_s2, c_s3, c_s4 = st.columns([0.45, 0.35, 0.1, 0.1])
                                     concluiu_sub = c_s1.checkbox(sub.titulo, value=sub.concluida, key=f"sub_{sub.id}")
                                     if concluiu_sub != sub.concluida:
                                         sub.concluida = concluiu_sub
@@ -554,10 +580,33 @@ elif menu == "Gerenciador de Tarefas":
                                     sub_p = sub.prazo.strftime('%d/%m/%Y') if sub.prazo else "-"
                                     c_s2.markdown(f"<span style='font-size: 0.8em; color: rgba(255,255,255,0.5);'>Resp: {resp_sub_nome} <br>Prazo: {sub_p}</span>", unsafe_allow_html=True)
                                     
-                                    if c_s3.button("X", key=f"del_sub_{sub.id}"):
+                                    # Botão para expandir edição da subtarefa
+                                    edit_sub_toggle = c_s3.button("✏️", key=f"btn_toggle_edit_sub_{sub.id}")
+                                    if edit_sub_toggle:
+                                        st.session_state[f"editing_sub_{sub.id}"] = not st.session_state.get(f"editing_sub_{sub.id}", False)
+                                        st.rerun()
+
+                                    if c_s4.button("X", key=f"del_sub_{sub.id}"):
                                         db.delete(sub)
                                         db.commit()
                                         st.rerun()
+
+                                    # Formulário de edição da subtarefa
+                                    if st.session_state.get(f"editing_sub_{sub.id}", False):
+                                        with st.form(key=f"form_edit_sub_{sub.id}"):
+                                            sub_e_tit = st.text_input("Título Subtarefa", value=sub.titulo, key=f"es_tit_{sub.id}")
+                                            ces_1, ces_2 = st.columns(2)
+                                            sub_r_idx = lista_usernames.index(resp_sub_nome) if resp_sub_nome in lista_usernames else idx_usuario_logado
+                                            sub_e_resp = ces_1.selectbox("Responsável", lista_usernames, index=sub_r_idx, key=f"es_resp_{sub.id}")
+                                            sub_e_pz = ces_2.date_input("Prazo", value=sub.prazo if sub.prazo else date.today(), key=f"es_pz_{sub.id}")
+                                            
+                                            if st.form_submit_button("Salvar Subtarefa"):
+                                                sub.titulo = sub_e_tit
+                                                sub.responsavel_id = dict_usuarios[sub_e_resp]
+                                                sub.prazo = sub_e_pz
+                                                db.commit()
+                                                st.session_state[f"editing_sub_{sub.id}"] = False
+                                                st.rerun()
 
                                     if sub.imagem_base64:
                                         try:
@@ -571,7 +620,7 @@ elif menu == "Gerenciador de Tarefas":
                                     st_tit = st.text_input("Título", key=f"tit_sub_{t.id}")
                                     cs_1, cs_2 = st.columns(2)
                                     st_pz = cs_1.date_input("Prazo", value=date.today(), key=f"pz_sub_{t.id}")
-                                    st_resp = cs_2.selectbox("Responsável", list(dict_usuarios.keys()), key=f"resp_sub_{t.id}")
+                                    st_resp = cs_2.selectbox("Responsável", lista_usernames, index=idx_usuario_logado, key=f"resp_sub_{t.id}")
                                     st_img = st.file_uploader("Anexo (Opcional)", type=["png", "jpg", "jpeg"], key=f"img_sub_{t.id}")
 
                                     if st.form_submit_button("Criar Subtarefa") and st_tit:
@@ -689,6 +738,22 @@ elif menu == "Caderno e Tópicos":
                             pass
 
                     st.markdown("---")
+                    
+                    # --- EDIÇÃO DE DOCUMENTOS ---
+                    with st.expander("✏️ Editar Documentação", expanded=False):
+                        with st.form(key=f"form_edit_note_{nota.id}"):
+                            edit_not_tit = st.text_input("Título", value=nota.titulo, key=f"en_tit_{nota.id}")
+                            edit_not_tags = st.text_input("Tags", value=nota.tags, key=f"en_tags_{nota.id}")
+                            edit_not_cont = st.text_area("Conteúdo", value=nota.conteudo or "", height=150, key=f"en_cont_{nota.id}")
+                            
+                            if st.form_submit_button("Salvar Alterações"):
+                                nota.titulo = edit_not_tit
+                                nota.tags = ",".join([t.strip().upper() for t in edit_not_tags.split(",")]) if edit_not_tags else "GERAL"
+                                nota.conteudo = edit_not_cont
+                                db.commit()
+                                show_toast("Documento atualizado com sucesso.", "success")
+                                st.rerun()
+
                     confirm_k_nota = f"del_nota_{nota.id}"
                     if not st.session_state.get(confirm_k_nota, False):
                         if st.button("Excluir Documento", key=f"btn_nota_{nota.id}"):
