@@ -37,6 +37,7 @@ GLOBAL_CSS = """
         background-image: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.04) 0%, transparent 40%);
     }
     
+    /* Card de Autenticação Estilo Glassmorphism */
     [data-testid="stForm"] {
         background-color: rgba(17, 24, 39, 0.5) !important;
         border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -59,7 +60,9 @@ GLOBAL_CSS = """
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         color: #ffffff; 
         border: none;
-        padding: 0.6rem 1rem;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+        white-space: nowrap;
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
@@ -468,7 +471,7 @@ elif menu == "Gerenciador de Tarefas":
             novo_titulo = col_f1.text_input("Título da Demanda")
             resp_escolhido = col_f2.selectbox("Responsável", lista_usernames, index=idx_usuario_logado)
             prioridade = col_f3.selectbox("Prioridade", ["Baixa", "Média", "Alta", "Urgente"], index=1)
-            prazo = col_f4.date_input("Prazo Limite", value=date.today())
+            prazo = col_f4.date_input("Prazo Limite", value=date.today(), format="DD/MM/YYYY")
             
             submitted = st.form_submit_button("Cadastrar")
             if submitted and novo_titulo:
@@ -552,7 +555,7 @@ elif menu == "Gerenciador de Tarefas":
                                     prio_idx = prios.index(t.prioridade) if t.prioridade in prios else 1
                                     edit_prio = c_et2.selectbox("Prioridade", prios, index=prio_idx, key=f"et_prio_{t.id}")
                                     
-                                    edit_pz = c_et3.date_input("Prazo", value=t.prazo if t.prazo else date.today(), key=f"et_pz_{t.id}")
+                                    edit_pz = c_et3.date_input("Prazo", value=t.prazo if t.prazo else date.today(), format="DD/MM/YYYY", key=f"et_pz_{t.id}")
 
                                     if st.form_submit_button("Salvar Alterações da Demanda"):
                                         t.titulo = edit_tit
@@ -569,7 +572,7 @@ elif menu == "Gerenciador de Tarefas":
                             if t.subtarefas:
                                 st.markdown("**Subtarefas:**")
                                 for sub in t.subtarefas:
-                                    c_s1, c_s2, c_s3, c_s4 = st.columns([0.45, 0.35, 0.1, 0.1])
+                                    c_s1, c_s2 = st.columns([0.55, 0.45])
                                     concluiu_sub = c_s1.checkbox(sub.titulo, value=sub.concluida, key=f"sub_{sub.id}")
                                     if concluiu_sub != sub.concluida:
                                         sub.concluida = concluiu_sub
@@ -578,27 +581,25 @@ elif menu == "Gerenciador de Tarefas":
                                     
                                     resp_sub_nome = sub.responsavel_sub.username if sub.responsavel_sub else "Sem resp."
                                     sub_p = sub.prazo.strftime('%d/%m/%Y') if sub.prazo else "-"
-                                    c_s2.markdown(f"<span style='font-size: 0.8em; color: rgba(255,255,255,0.5);'>Resp: {resp_sub_nome} <br>Prazo: {sub_p}</span>", unsafe_allow_html=True)
+                                    c_s2.markdown(f"<div style='font-size: 0.8rem; color: rgba(255,255,255,0.5); text-align: right;'>{resp_sub_nome} &bull; {sub_p}</div>", unsafe_allow_html=True)
                                     
-                                    # Botão para expandir edição da subtarefa
-                                    edit_sub_toggle = c_s3.button("Editar", key=f"btn_toggle_edit_sub_{sub.id}")
-                                    if edit_sub_toggle:
+                                    c_b1, c_b2, _ = st.columns([0.25, 0.25, 0.5])
+                                    if c_b1.button("Editar", key=f"btn_toggle_edit_sub_{sub.id}"):
                                         st.session_state[f"editing_sub_{sub.id}"] = not st.session_state.get(f"editing_sub_{sub.id}", False)
                                         st.rerun()
 
-                                    if c_s4.button("Excluir", key=f"del_sub_{sub.id}"):
+                                    if c_b2.button("Excluir", key=f"del_sub_{sub.id}"):
                                         db.delete(sub)
                                         db.commit()
                                         st.rerun()
 
-                                    # Formulário de edição da subtarefa
                                     if st.session_state.get(f"editing_sub_{sub.id}", False):
                                         with st.form(key=f"form_edit_sub_{sub.id}"):
                                             sub_e_tit = st.text_input("Título Subtarefa", value=sub.titulo, key=f"es_tit_{sub.id}")
                                             ces_1, ces_2 = st.columns(2)
                                             sub_r_idx = lista_usernames.index(resp_sub_nome) if resp_sub_nome in lista_usernames else idx_usuario_logado
                                             sub_e_resp = ces_1.selectbox("Responsável", lista_usernames, index=sub_r_idx, key=f"es_resp_{sub.id}")
-                                            sub_e_pz = ces_2.date_input("Prazo", value=sub.prazo if sub.prazo else date.today(), key=f"es_pz_{sub.id}")
+                                            sub_e_pz = ces_2.date_input("Prazo", value=sub.prazo if sub.prazo else date.today(), format="DD/MM/YYYY", key=f"es_pz_{sub.id}")
                                             
                                             if st.form_submit_button("Salvar Subtarefa"):
                                                 sub.titulo = sub_e_tit
@@ -614,12 +615,14 @@ elif menu == "Gerenciador de Tarefas":
                                             st.image(img_bytes, caption="Anexo", use_column_width=True)
                                         except Exception:
                                             pass
+                                    
+                                    st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
 
                             with st.expander("Adicionar Subtarefa", expanded=False):
                                 with st.form(key=f"form_sub_{t.id}", clear_on_submit=True):
                                     st_tit = st.text_input("Título", key=f"tit_sub_{t.id}")
                                     cs_1, cs_2 = st.columns(2)
-                                    st_pz = cs_1.date_input("Prazo", value=date.today(), key=f"pz_sub_{t.id}")
+                                    st_pz = cs_1.date_input("Prazo", value=date.today(), format="DD/MM/YYYY", key=f"pz_sub_{t.id}")
                                     st_resp = cs_2.selectbox("Responsável", lista_usernames, index=idx_usuario_logado, key=f"resp_sub_{t.id}")
                                     st_img = st.file_uploader("Anexo (Opcional)", type=["png", "jpg", "jpeg"], key=f"img_sub_{t.id}")
 
