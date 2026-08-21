@@ -60,9 +60,7 @@ GLOBAL_CSS = """
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
         color: #ffffff; 
         border: none;
-        padding: 0.4rem 0.6rem;
-        font-size: 0.85rem;
-        white-space: nowrap;
+        padding: 0.5rem 1rem;
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
@@ -543,7 +541,7 @@ elif menu == "Gerenciador de Tarefas":
                                 st.rerun()
 
                             # --- EDIÇÃO DA TAREFA ---
-                            with st.expander("Editar Detalhes da Demanda", expanded=False):
+                            with st.expander("Editar Demanda", expanded=False):
                                 with st.form(key=f"edit_task_form_{t.id}"):
                                     edit_tit = st.text_input("Título", value=t.titulo, key=f"et_tit_{t.id}")
                                     c_et1, c_et2, c_et3 = st.columns(3)
@@ -557,57 +555,55 @@ elif menu == "Gerenciador de Tarefas":
                                     
                                     edit_pz = c_et3.date_input("Prazo", value=t.prazo if t.prazo else date.today(), format="DD/MM/YYYY", key=f"et_pz_{t.id}")
 
-                                    if st.form_submit_button("Salvar Alterações da Demanda"):
+                                    if st.form_submit_button("Salvar Alterações"):
                                         t.titulo = edit_tit
                                         t.responsavel_id = dict_usuarios[edit_resp]
                                         t.prioridade = edit_prio
                                         t.prazo = edit_pz
                                         db.commit()
-                                        show_toast("Demanda atualizada com sucesso.", "success")
+                                        show_toast("Demanda atualizada.", "success")
                                         st.rerun()
 
                             st.markdown("---")
                             
-                            # --- SUBTAREFAS ---
+                            # --- SUBTAREFAS (DESIGN MINIMALISTA E LINEAR) ---
                             if t.subtarefas:
                                 st.markdown("**Subtarefas:**")
                                 for sub in t.subtarefas:
-                                    c_s1, c_s2 = st.columns([0.55, 0.45])
-                                    concluiu_sub = c_s1.checkbox(sub.titulo, value=sub.concluida, key=f"sub_{sub.id}")
+                                    resp_sub_nome = sub.responsavel_sub.username if sub.responsavel_sub else "-"
+                                    sub_p = sub.prazo.strftime('%d/%m/%Y') if sub.prazo else "-"
+                                    
+                                    # Linha única: Checkbox e texto com dados resumidos
+                                    concluiu_sub = st.checkbox(
+                                        f"{sub.titulo}  •  {resp_sub_nome}  •  {sub_p}", 
+                                        value=sub.concluida, 
+                                        key=f"sub_{sub.id}"
+                                    )
                                     if concluiu_sub != sub.concluida:
                                         sub.concluida = concluiu_sub
                                         db.commit()
                                         st.rerun()
-                                    
-                                    resp_sub_nome = sub.responsavel_sub.username if sub.responsavel_sub else "Sem resp."
-                                    sub_p = sub.prazo.strftime('%d/%m/%Y') if sub.prazo else "-"
-                                    c_s2.markdown(f"<div style='font-size: 0.8rem; color: rgba(255,255,255,0.5); text-align: right;'>{resp_sub_nome} &bull; {sub_p}</div>", unsafe_allow_html=True)
-                                    
-                                    c_b1, c_b2, _ = st.columns([0.25, 0.25, 0.5])
-                                    if c_b1.button("Editar", key=f"btn_toggle_edit_sub_{sub.id}"):
-                                        st.session_state[f"editing_sub_{sub.id}"] = not st.session_state.get(f"editing_sub_{sub.id}", False)
-                                        st.rerun()
 
-                                    if c_b2.button("Excluir", key=f"del_sub_{sub.id}"):
-                                        db.delete(sub)
-                                        db.commit()
-                                        st.rerun()
-
-                                    if st.session_state.get(f"editing_sub_{sub.id}", False):
+                                    # Expander super compacto e discreto para gerenciar a subtarefa
+                                    with st.expander("Opções da subtarefa", expanded=False):
                                         with st.form(key=f"form_edit_sub_{sub.id}"):
-                                            sub_e_tit = st.text_input("Título Subtarefa", value=sub.titulo, key=f"es_tit_{sub.id}")
+                                            sub_e_tit = st.text_input("Título", value=sub.titulo, key=f"es_tit_{sub.id}")
                                             ces_1, ces_2 = st.columns(2)
                                             sub_r_idx = lista_usernames.index(resp_sub_nome) if resp_sub_nome in lista_usernames else idx_usuario_logado
                                             sub_e_resp = ces_1.selectbox("Responsável", lista_usernames, index=sub_r_idx, key=f"es_resp_{sub.id}")
                                             sub_e_pz = ces_2.date_input("Prazo", value=sub.prazo if sub.prazo else date.today(), format="DD/MM/YYYY", key=f"es_pz_{sub.id}")
                                             
-                                            if st.form_submit_button("Salvar Subtarefa"):
+                                            if st.form_submit_button("Salvar Modificações"):
                                                 sub.titulo = sub_e_tit
                                                 sub.responsavel_id = dict_usuarios[sub_e_resp]
                                                 sub.prazo = sub_e_pz
                                                 db.commit()
-                                                st.session_state[f"editing_sub_{sub.id}"] = False
                                                 st.rerun()
+                                        
+                                        if st.button("Excluir subtarefa", key=f"del_sub_{sub.id}"):
+                                            db.delete(sub)
+                                            db.commit()
+                                            st.rerun()
 
                                     if sub.imagem_base64:
                                         try:
@@ -615,8 +611,6 @@ elif menu == "Gerenciador de Tarefas":
                                             st.image(img_bytes, caption="Anexo", use_column_width=True)
                                         except Exception:
                                             pass
-                                    
-                                    st.markdown("<div style='margin-bottom: 8px;'></div>", unsafe_allow_html=True)
 
                             with st.expander("Adicionar Subtarefa", expanded=False):
                                 with st.form(key=f"form_sub_{t.id}", clear_on_submit=True):
