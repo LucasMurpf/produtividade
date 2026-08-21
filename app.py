@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import hashlib
 import base64
 import logging
@@ -104,6 +104,7 @@ class Usuario(Base):
     subtarefas_atribuidas = relationship("SubTarefa", foreign_keys="SubTarefa.responsavel_id", backref="responsavel_sub", cascade="all, delete-orphan")
     anotacoes = relationship("Anotacao", backref="usuario", cascade="all, delete-orphan")
     notificacoes = relationship("Notificacao", backref="usuario", cascade="all, delete-orphan")
+    habitos = relationship("Habito", backref="usuario", cascade="all, delete-orphan")
 
 
 class Notificacao(Base):
@@ -149,6 +150,25 @@ class Anotacao(Base):
     imagem_base64 = Column(Text, nullable=True)
     data_criacao = Column(DateTime, default=datetime.utcnow)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+
+
+class Habito(Base):
+    __tablename__ = "habitos"
+    id = Column(Integer, primary_key=True, index=True)
+    titulo = Column(String, nullable=False)
+    categoria = Column(String, default="Geral")
+    data_criacao = Column(Date, default=date.today)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    
+    registros = relationship("RegistroHabito", backref="habito", cascade="all, delete-orphan")
+
+
+class RegistroHabito(Base):
+    __tablename__ = "registros_habito"
+    id = Column(Integer, primary_key=True, index=True)
+    habito_id = Column(Integer, ForeignKey("habitos.id"))
+    data = Column(Date, default=date.today, index=True)
+    concluido = Column(Boolean, default=True)
 
 
 Base.metadata.create_all(bind=engine)
@@ -227,7 +247,7 @@ if st.session_state.user_id is None:
         Clareza mental,<br>do primeiro<br>pensamento<br>à entrega.
     </h1>
     <p style='font-weight: 400; font-size: 0.95rem; color: rgba(255,255,255,0.5); line-height: 1.6; margin-bottom: 2.5rem; max-width: 420px;'>
-        Sem distrações. Você sabe exatamente o que precisa ser feito — quadro, caderno, métricas e foco em um único ambiente.
+        Sem distrações. Você sabe exatamente o que precisa ser feito — quadro, caderno, hábitos e foco em um único ambiente.
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -240,7 +260,7 @@ if st.session_state.user_id is None:
         with c_inf2:
             st.markdown("<div style='color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-bottom: 2px;'>Caderno</div><div style='color: rgba(255,255,255,0.4); font-size: 0.75rem;'>Documentos com tags</div>", unsafe_allow_html=True)
         with c_inf3:
-            st.markdown("<div style='color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-bottom: 2px;'>Foco</div><div style='color: rgba(255,255,255,0.4); font-size: 0.75rem;'>Ciclos pomodoro</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color: #ffffff; font-weight: 600; font-size: 0.9rem; margin-bottom: 2px;'>Hábitos</div><div style='color: rgba(255,255,255,0.4); font-size: 0.75rem;'>Rotina diária</div>", unsafe_allow_html=True)
         
     with col_direita:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -332,7 +352,7 @@ with get_db() as db:
                 db.commit()
                 st.rerun()
 
-menu_opcoes = ["Visão Geral", "Gerenciador de Tarefas", "Caderno e Tópicos", "Estatísticas"]
+menu_opcoes = ["Visão Geral", "Gerenciador de Tarefas", "Hábitos e Rotinas", "Caderno e Tópicos", "Estatísticas"]
 if st.session_state.username == "lucasmurpf":
     menu_opcoes.append("Painel Admin")
 
@@ -741,6 +761,139 @@ elif menu == "Gerenciador de Tarefas":
                                 if col_n.button("Cancelar", key=f"no_rem_{t.id}"):
                                     st.session_state[confirm_key] = False
                                     st.rerun()
+
+elif menu == "Hábitos e Rotinas":
+    st.title("Hábitos e Rotinas")
+    st.markdown("Acompanhe e consolide seus rituais diários com consistência.")
+    
+    hoje = date.today()
+    
+    # Formulário para criação de novo hábito
+    with st.expander("Cadastrar Novo Hábito", expanded=False):
+        with st.form("form_novo_habito", clear_on_submit=True):
+            c_h1, c_h2 = st.columns([0.7, 0.3])
+            tit_habito = c_h1.text_input("Nome do Hábito (ex: Leitura 20 min, Treino, Beber 2L água)")
+            cat_habito = c_h2.selectbox("Categoria", ["Geral", "Saúde", "Estudos", "Trabalho", "Mente"])
+            
+            if st.form_submit_button("Cadastrar Hábito") and tit_habito:
+                with get_db() as db:
+                    novo_h = Habito(
+                        titulo=tit_habito,
+                        categoria=cat_habito,
+                        usuario_id=user_id
+                    )
+                    db.add(novo_h)
+                    db.commit()
+                show_toast(f"Hábito '{tit_habito}' cadastrado!", "success")
+                st.rerun()
+
+    st.markdown("---")
+
+    with get_db() as db:
+        meus_habitos = db.query(Habito).filter(Habito.usuario_id == user_id).order_by(Habito.id.asc()).all()
+        
+        if not meus_habitos:
+            st.info("Nenhum hábito cadastrado ainda. Comece adicionando um no expander acima.")
+        else:
+            # Resumo do Dia
+            registros_hoje = db.query(RegistroHabito).filter(
+                RegistroHabito.habito_id.in_([h.id for h in meus_habitos]),
+                RegistroHabito.data == hoje,
+                RegistroHabito.concluido == True
+            ).all()
+            ids_concluidos_hoje = {r.habito_id for r in registros_hoje}
+            
+            total_habitos = len(meus_habitos)
+            total_concluidos = len(ids_concluidos_hoje)
+            taxa_hoje = total_concluidos / total_habitos if total_habitos > 0 else 0.0
+
+            c_met1, c_met2 = st.columns([0.4, 0.6])
+            with c_met1:
+                st.subheader(f"Hoje • {hoje.strftime('%d/%m/%Y')}")
+                st.caption(f"{total_concluidos} de {total_habitos} concluídos ({int(taxa_hoje * 100)}%)")
+            with c_met2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.progress(taxa_hoje)
+
+            st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
+
+            # Lista de Hábitos do Dia
+            col_hab1, col_hab2 = st.columns([0.65, 0.35])
+            
+            with col_hab1:
+                st.markdown("### Checklist do Dia")
+                for h in meus_habitos:
+                    esta_feito = h.id in ids_concluidos_hoje
+                    
+                    check = st.checkbox(
+                        f"{h.titulo}  •  {h.categoria}", 
+                        value=esta_feito, 
+                        key=f"chk_hab_{h.id}_{hoje.strftime('%Y%m%d')}"
+                    )
+                    
+                    # Atualiza o registro no banco ao clicar
+                    if check != esta_feito:
+                        reg_existente = db.query(RegistroHabito).filter(
+                            RegistroHabito.habito_id == h.id,
+                            RegistroHabito.data == hoje
+                        ).first()
+                        
+                        if check:
+                            if not reg_existente:
+                                db.add(RegistroHabito(habito_id=h.id, data=hoje, concluido=True))
+                            else:
+                                reg_existente.concluido = True
+                        else:
+                            if reg_existente:
+                                db.delete(reg_existente)
+                        
+                        db.commit()
+                        st.rerun()
+
+                    # Opções rápidas de edição / exclusão do hábito
+                    with st.expander(f"Gerenciar '{h.titulo}'", expanded=False):
+                        with st.form(key=f"form_ed_hab_{h.id}"):
+                            n_tit = st.text_input("Título", value=h.titulo, key=f"eh_t_{h.id}")
+                            cats = ["Geral", "Saúde", "Estudos", "Trabalho", "Mente"]
+                            c_idx = cats.index(h.categoria) if h.categoria in cats else 0
+                            n_cat = st.selectbox("Categoria", cats, index=c_idx, key=f"eh_c_{h.id}")
+                            
+                            if st.form_submit_button("Salvar Alteração"):
+                                h.titulo = n_tit
+                                h.categoria = n_cat
+                                db.commit()
+                                st.rerun()
+                        
+                        if st.button("Excluir Hábito", key=f"del_h_{h.id}"):
+                            db.delete(h)
+                            db.commit()
+                            st.rerun()
+
+            # Matriz de Consistência Semanal
+            with col_hab2:
+                st.markdown("### Últimos 7 Dias")
+                ultimos_dias = [hoje - timedelta(days=i) for i in range(6, -1, -1)]
+                
+                # Busca todos os registros dos últimos 7 dias
+                regs_semana = db.query(RegistroHabito).filter(
+                    RegistroHabito.habito_id.in_([h.id for h in meus_habitos]),
+                    RegistroHabito.data >= ultimos_dias[0],
+                    RegistroHabito.concluido == True
+                ).all()
+                
+                mapa_feitos = {(r.habito_id, r.data) for r in regs_semana}
+
+                # Monta tabela visual limpa
+                matriz_dados = []
+                for h in meus_habitos:
+                    linha = {"Hábito": h.titulo}
+                    for d in ultimos_dias:
+                        nome_col = d.strftime("%d/%m")
+                        linha[nome_col] = "✓" if (h.id, d) in mapa_feitos else "·"
+                    matriz_dados.append(linha)
+                
+                df_semana = pd.DataFrame(matriz_dados)
+                st.dataframe(df_semana, use_container_width=True, hide_index=True)
 
 elif menu == "Caderno e Tópicos":
     st.title("Repositório de Conhecimento")
